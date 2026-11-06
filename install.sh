@@ -9,6 +9,10 @@
 #   UTILIFY_NO_LAUNCH=1  don't open the app afterwards
 #   UTILIFY_NO_FAN_HELPER=1  don't install the fan-control helper (and so
 #                         don't ask for sudo); fans stay read-only
+#   UTILIFY_CLI_DIR      where to link the utilifyctl command (default: the
+#                         first writable of /opt/homebrew/bin, /usr/local/bin,
+#                         ~/.local/bin)
+#   UTILIFY_NO_CLI=1     don't link utilifyctl
 set -euo pipefail
 
 APP="Utilify.app"
@@ -38,6 +42,8 @@ if [[ -z "${UTILIFY_INSTALL_DIR:-}" && ! -w "$dest" ]]; then
   dest="$HOME/Applications"
 fi
 mkdir -p "$dest"
+# Absolute, so the utilifyctl symlink below points at the right place.
+dest="$(cd "$dest" && pwd)"
 
 # Replace a running copy.
 if pgrep -xq utilify; then
@@ -51,6 +57,30 @@ rm -rf "${dest:?}/$APP"
 cp -R "$built" "$dest/"
 # Clear quarantine in case the source tree was downloaded rather than cloned.
 xattr -dr com.apple.quarantine "$dest/$APP" 2>/dev/null || true
+
+# The command line: utilifyctl lives inside the bundle, so a symlink keeps
+# it in step with the app on every install.
+cli="$dest/$APP/Contents/MacOS/utilifyctl"
+if [[ "${UTILIFY_NO_CLI:-}" == 1 ]]; then
+  say "Skipping the utilifyctl link (UTILIFY_NO_CLI=1)"
+elif [[ -x "$cli" ]]; then
+  bin_dir="${UTILIFY_CLI_DIR:-}"
+  if [[ -z "$bin_dir" ]]; then
+    for d in /opt/homebrew/bin /usr/local/bin "$HOME/.local/bin"; do
+      if [[ -d "$d" && -w "$d" ]]; then bin_dir="$d"; break; fi
+    done
+    bin_dir="${bin_dir:-$HOME/.local/bin}"
+  fi
+  mkdir -p "$bin_dir"
+  ln -sf "$cli" "$bin_dir/utilifyctl"
+  say "Linked utilifyctl into $bin_dir"
+  case ":$PATH:" in
+    *":$bin_dir:"*) ;;
+    *) echo "    $bin_dir isn't on your PATH; add it to run utilifyctl by name." ;;
+  esac
+else
+  printf '\033[33mwarning:\033[0m %s is missing; utilifyctl not linked\n' "$cli" >&2
+fi
 
 # Fan control. Setting fan speeds means writing to the SMC, which macOS only
 # allows root, so a small helper runs as a root LaunchDaemon and takes

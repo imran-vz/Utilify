@@ -100,6 +100,12 @@ pub struct Stats {
     speed_test_cancel: Option<Arc<AtomicBool>>,
     /// What the speed test showed before the current run, restored on cancel.
     speed_test_before: SpeedTest,
+    /// Runs started so far, and the one whose state [`Stats::speed_test`]
+    /// shows (0 for none), so a waiting `utilifyctl` can tell its own
+    /// result from one a cancel put back.
+    speed_test_runs: u64,
+    pub speed_test_run: u64,
+    speed_test_before_run: u64,
     /// The notification rules, and the system thermal state they watch
     /// (set by the sampler from gpui).
     pub alerts: Alerts,
@@ -118,6 +124,9 @@ pub struct Stats {
     fan_service: Option<FanService>,
     /// Last sensor demand sent to the fan thread.
     fan_sensors_wanted: bool,
+    /// When `utilifyctl` last asked for the sensors; they're read for a
+    /// while after ([`crate::control::SENSORS_FOR`]).
+    pub cli_sensors_at: Option<Instant>,
     pub power: PowerState,
     power_read_at: Option<Instant>,
     /// The last self-check results, and when they ran.
@@ -148,6 +157,9 @@ impl Stats {
             speed_test: SpeedTest::Idle,
             speed_test_cancel: None,
             speed_test_before: SpeedTest::Idle,
+            speed_test_runs: 0,
+            speed_test_run: 0,
+            speed_test_before_run: 0,
             alerts: Alerts::new(),
             thermal: Thermal::Nominal,
             keep_awake: KeepAwake::with_total(
@@ -168,6 +180,7 @@ impl Stats {
             fan_settings_path,
             fan_service: None,
             fan_sensors_wanted: false,
+            cli_sensors_at: None,
             power: power::read(),
             power_read_at: Some(Instant::now()),
             health: Vec::new(),
@@ -559,6 +572,8 @@ impl Stats {
         }
         let cancel = Arc::new(AtomicBool::new(false));
         self.speed_test_cancel = Some(cancel.clone());
+        self.speed_test_runs += 1;
+        self.speed_test_before_run = std::mem::replace(&mut self.speed_test_run, self.speed_test_runs);
         self.speed_test_before = std::mem::replace(
             &mut self.speed_test,
             SpeedTest::Running {
@@ -621,6 +636,7 @@ impl Stats {
         };
         cancel.store(true, Ordering::Relaxed);
         self.speed_test = std::mem::take(&mut self.speed_test_before);
+        self.speed_test_run = self.speed_test_before_run;
         cx.notify();
     }
 

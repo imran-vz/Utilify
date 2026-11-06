@@ -204,6 +204,275 @@ impl StorageAlarm {
     }
 }
 
+/// What a setting holds, which says how a typed value is read.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FieldKind {
+    Bool,
+    /// One of [`INTERVALS_MS`].
+    Interval,
+    /// A whole percentage in `min..=max`.
+    Percent { min: u8, max: u8 },
+    /// Whole minutes in `min..=max`.
+    Minutes { min: u16, max: u16 },
+    /// A temperature sensor's id.
+    Sensor,
+}
+
+/// One setting, as the CLI lists it: its `settings.json` key, the section
+/// and wording the dashboard uses for it.
+#[derive(Clone, Copy, Debug)]
+pub struct Field {
+    pub key: &'static str,
+    pub section: &'static str,
+    pub label: &'static str,
+    pub kind: FieldKind,
+}
+
+const fn field(key: &'static str, section: &'static str, label: &'static str, kind: FieldKind) -> Field {
+    Field {
+        key,
+        section,
+        label,
+        kind,
+    }
+}
+
+/// The yellow and red storage limits the dashboard's steppers stay within.
+pub const STORAGE_PCT_MIN: u8 = 5;
+pub const STORAGE_PCT_MAX: u8 = 95;
+
+/// Every setting, in the dashboard's order.
+pub const FIELDS: &[Field] = {
+    use FieldKind::*;
+    const MENU: &str = "Menu bar";
+    const STORAGE: &str = "Storage";
+    const AWAKE: &str = "Keep awake";
+    const NOTIFY: &str = "Notifications";
+    &[
+        field("interval_ms", MENU, "Refresh every", Interval),
+        field("show_rates", MENU, "Show speeds next to the icon", Bool),
+        field("show_temp", MENU, "Show temperature next to the icon", Bool),
+        field("menu_temp_sensor", MENU, "Temperature sensor shown", Sensor),
+        field("show_fan_rpm", MENU, "Show the fastest fan's speed", Bool),
+        field(
+            "storage_warn_pct",
+            STORAGE,
+            "Bar turns yellow from (% used)",
+            Percent {
+                min: STORAGE_PCT_MIN,
+                max: STORAGE_PCT_MAX - 1,
+            },
+        ),
+        field(
+            "storage_danger_pct",
+            STORAGE,
+            "Bar turns red from (% used)",
+            Percent {
+                min: STORAGE_PCT_MIN + 1,
+                max: STORAGE_PCT_MAX,
+            },
+        ),
+        field("storage_notify", STORAGE, "Notify in the red", Bool),
+        field("awake_allow_display_sleep", AWAKE, "Allow display sleep", Bool),
+        field(
+            "awake_allow_closed_display_sleep",
+            AWAKE,
+            "Allow sleep with the lid closed",
+            Bool,
+        ),
+        field("awake_screen_saver", AWAKE, "Allow the screen saver", Bool),
+        field(
+            "awake_screen_saver_mins",
+            AWAKE,
+            "Screen saver after (minutes)",
+            Minutes { min: 5, max: 240 },
+        ),
+        field("awake_on_launch", AWAKE, "Start a session at launch", Bool),
+        field("awake_notify_end", AWAKE, "Notify when a session ends", Bool),
+        field("notify_enabled", NOTIFY, "Allow notifications", Bool),
+        field("notify_fans_battery", NOTIFY, "Fans at full speed on battery", Bool),
+        field(
+            "notify_low_battery_awake",
+            NOTIFY,
+            "Low battery while kept awake",
+            Bool,
+        ),
+        field(
+            "low_battery_pct",
+            NOTIFY,
+            "Low battery at (%)",
+            Percent { min: 15, max: 50 },
+        ),
+        field("notify_lid_battery", NOTIFY, "Lid sleep on battery", Bool),
+        field("notify_awake_ending", NOTIFY, "Session ending soon", Bool),
+        field("notify_thermal", NOTIFY, "Thermal pressure", Bool),
+        field("notify_fan_overheat", NOTIFY, "Overheating", Bool),
+        field("notify_fan_helper", NOTIFY, "Fan helper lost", Bool),
+        field("notify_foreign_fans", NOTIFY, "Another app takes the fans", Bool),
+        field("notify_offline", NOTIFY, "Network offline", Bool),
+        field("notify_speed_test", NOTIFY, "Speed test finished", Bool),
+    ]
+};
+
+/// The field for `key`, which may use dashes for underscores.
+pub fn find_field(key: &str) -> Option<&'static Field> {
+    let key = key.trim().replace('-', "_").to_ascii_lowercase();
+    FIELDS.iter().find(|f| f.key == key)
+}
+
+/// `on`, `true`, `yes`, `1` and their opposites.
+pub fn parse_bool(value: &str) -> Option<bool> {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "on" | "true" | "yes" | "1" | "enable" | "enabled" => Some(true),
+        "off" | "false" | "no" | "0" | "disable" | "disabled" => Some(false),
+        _ => None,
+    }
+}
+
+/// `500ms`, `1s`, `2 s`, `5000`.
+fn parse_interval(value: &str) -> Option<u64> {
+    let v = value.trim().to_ascii_lowercase().replace(' ', "");
+    if let Some(ms) = v.strip_suffix("ms") {
+        return ms.parse().ok();
+    }
+    if let Some(s) = v.strip_suffix('s') {
+        return s.parse::<f64>().ok().map(|s| (s * 1000.0).round() as u64);
+    }
+    v.parse().ok()
+}
+
+/// `45`, `45m`, `1h`, `1h30m`.
+fn parse_minutes(value: &str) -> Option<u64> {
+    let v = value.trim().to_ascii_lowercase().replace(' ', "");
+    if let Ok(n) = v.parse() {
+        return Some(n);
+    }
+    let (h, rest) = match v.split_once('h') {
+        Some((h, rest)) => (h.parse::<u64>().ok()?, rest),
+        None => (0, v.as_str()),
+    };
+    let m = match rest.strip_suffix("min").or_else(|| rest.strip_suffix('m')) {
+        Some(m) => m.parse::<u64>().ok()?,
+        None if rest.is_empty() => 0,
+        None => return None,
+    };
+    // Checked: a huge number is out of range, not a wrapped small one.
+    h.checked_mul(60)?.checked_add(m)
+}
+
+impl Settings {
+    /// One setting's value as text: `on`, `1000`, `cpu_core_average`.
+    pub fn get_field(&self, key: &str) -> Option<String> {
+        let f = find_field(key)?;
+        let json = serde_json::to_value(self).ok()?;
+        Some(match json.get(f.key)? {
+            serde_json::Value::Bool(b) => if *b { "on" } else { "off" }.into(),
+            serde_json::Value::String(s) => s.clone(),
+            other => other.to_string(),
+        })
+    }
+
+    /// Set one setting from text, held to the limits the dashboard keeps it
+    /// in. `known_sensor` says whether a sensor id exists. Returns the value
+    /// as stored.
+    pub fn set_field(
+        &mut self,
+        key: &str,
+        value: &str,
+        known_sensor: impl Fn(&str) -> bool,
+    ) -> Result<String, String> {
+        let f = find_field(key).ok_or_else(|| format!("no setting called \"{key}\""))?;
+        let mut json = serde_json::to_value(&*self).map_err(|e| e.to_string())?;
+        let new = match f.kind {
+            FieldKind::Bool => serde_json::Value::Bool(
+                parse_bool(value).ok_or_else(|| format!("{} takes on or off", f.key))?,
+            ),
+            FieldKind::Interval => {
+                let ms = parse_interval(value)
+                    .filter(|ms| INTERVALS_MS.contains(ms))
+                    .ok_or_else(|| {
+                        let choices: Vec<String> = INTERVALS_MS
+                            .iter()
+                            .map(|ms| crate::format::interval(*ms))
+                            .collect();
+                        format!("{} takes one of {}", f.key, choices.join(", "))
+                    })?;
+                ms.into()
+            }
+            FieldKind::Percent { min, max } => {
+                let v: u8 = value
+                    .trim()
+                    .trim_end_matches('%')
+                    .trim()
+                    .parse()
+                    .ok()
+                    .filter(|v| (min..=max).contains(v))
+                    .ok_or_else(|| format!("{} takes a percentage from {min} to {max}", f.key))?;
+                match f.key {
+                    "storage_warn_pct" if v >= self.storage_danger_pct => {
+                        return Err(format!(
+                            "yellow has to start below red ({}%)",
+                            self.storage_danger_pct
+                        ));
+                    }
+                    "storage_danger_pct" if v <= self.storage_warn_pct => {
+                        return Err(format!(
+                            "red has to start above yellow ({}%)",
+                            self.storage_warn_pct
+                        ));
+                    }
+                    _ => {}
+                }
+                v.into()
+            }
+            FieldKind::Minutes { min, max } => {
+                let v = parse_minutes(value)
+                    .filter(|v| (min as u64..=max as u64).contains(v))
+                    .ok_or_else(|| format!("{} takes {min} to {max} minutes", f.key))?;
+                v.into()
+            }
+            FieldKind::Sensor => {
+                let id = value.trim();
+                if !known_sensor(id) {
+                    return Err(format!(
+                        "no sensor called \"{id}\" (`utilifyctl sensors` lists them)"
+                    ));
+                }
+                id.into()
+            }
+        };
+        json[f.key] = new;
+        *self = serde_json::from_value(json).map_err(|e| e.to_string())?;
+        self.get_field(f.key)
+            .ok_or_else(|| format!("couldn't read {} back", f.key))
+    }
+}
+
+/// An exclusive lock on the settings (`.settings.lock` beside
+/// `settings_path`), released on drop. `utilifyctl` holds it while it edits
+/// `settings.json` with the app closed; the app holds it from loading its
+/// settings until its socket is up. So an edit either lands before the app
+/// reads the file, or finds the app answering and goes through it.
+pub struct Lock {
+    _file: std::fs::File,
+}
+
+pub fn lock(settings_path: &Path) -> std::io::Result<Lock> {
+    use std::os::fd::AsRawFd;
+    let dir = settings_path.parent().unwrap_or(Path::new("."));
+    std::fs::create_dir_all(dir)?;
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(dir.join(".settings.lock"))?;
+    // SAFETY: a valid fd; closing it (on drop) releases the lock.
+    if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(Lock { _file: file })
+}
+
 pub fn default_path() -> Option<PathBuf> {
     Some(
         dirs::data_dir()?
@@ -345,6 +614,56 @@ pub(crate) mod tests {
                 .iter()
                 .all(|&k| !muted.alert_prefs().allows(k))
         );
+    }
+
+    #[test]
+    fn every_setting_is_listed_once() {
+        let json = serde_json::to_value(Settings::default()).unwrap();
+        let keys: Vec<&String> = json.as_object().unwrap().keys().collect();
+        assert_eq!(keys.len(), FIELDS.len());
+        for k in keys {
+            assert!(find_field(k).is_some(), "{k} has no field");
+        }
+    }
+
+    #[test]
+    fn fields_are_set_from_text_within_the_ui_limits() {
+        let any = |_: &str| true;
+        let mut s = Settings::default();
+        assert_eq!(
+            s.set_field("awake-allow-display-sleep", "on", any).as_deref(),
+            Ok("on")
+        );
+        assert!(s.awake_allow_display_sleep);
+        assert_eq!(s.get_field("awake_allow_display_sleep").as_deref(), Some("on"));
+        assert!(s.set_field("show_rates", "maybe", any).is_err());
+
+        assert_eq!(s.set_field("interval_ms", "500ms", any).as_deref(), Ok("500"));
+        assert_eq!(s.set_field("interval_ms", "2s", any).as_deref(), Ok("2000"));
+        assert!(s.set_field("interval_ms", "3s", any).is_err());
+
+        assert_eq!(s.set_field("storage_danger_pct", "90%", any).as_deref(), Ok("90"));
+        assert!(s.set_field("storage_warn_pct", "90", any).is_err(), "not below red");
+        assert!(s.set_field("storage_danger_pct", "40", any).is_err(), "not above yellow");
+        assert!(s.set_field("storage_danger_pct", "99", any).is_err());
+        assert!(s.set_field("low_battery_pct", "10", any).is_err());
+
+        assert_eq!(
+            s.set_field("awake_screen_saver_mins", "1h30m", any).as_deref(),
+            Ok("90")
+        );
+        assert!(s.set_field("awake_screen_saver_mins", "1", any).is_err());
+        assert!(
+            s.set_field("awake_screen_saver_mins", "307445734561825861h", any)
+                .is_err()
+        );
+
+        assert!(s.set_field("menu_temp_sensor", "nope", |id| id == "gpu_max").is_err());
+        assert_eq!(
+            s.set_field("menu_temp_sensor", "gpu_max", |id| id == "gpu_max").as_deref(),
+            Ok("gpu_max")
+        );
+        assert!(s.set_field("colour", "red", any).is_err());
     }
 
     #[test]

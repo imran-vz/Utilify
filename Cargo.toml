@@ -4,6 +4,7 @@ members = [
     "crates/utilify-core",
     "crates/utilify-chef",
     "crates/utilify-app",
+    "crates/utilify-cli",
     "crates/utilify-smc",
     "crates/utilify-fanhelper",
 ]

@@ -197,6 +197,67 @@ rest as "soon". The codecs come from maintained libraries and the
 utilify-codecs crates (see `crates/utilify-chef/DEPENDENCIES.md`). While the
 window is open, Utilify shows in the Dock.
 
+## The command line
+
+`utilifyctl` reads and changes what the dashboard and the menu do, from a
+terminal. It talks to the running app, so a change made with it shows up in
+the menu bar and the dashboard straight away, and a change made in the
+dashboard shows up in `utilifyctl` on its next refresh. The workbench's
+operations aren't in it yet; `utilifyctl workbench open` opens the window.
+
+```sh
+utilifyctl                       # the overview
+utilifyctl watch                 # a live view of the dashboard's tabs
+utilifyctl network -w            # one tab, live
+utilifyctl speedtest             # runs one and waits; Ctrl-C cancels it
+utilifyctl speedtest copy        # the last result, on the clipboard
+utilifyctl storage               # use, bar colours, 30 days of history
+utilifyctl awake start 2h        # or: until 18:30, app Xcode, download, network
+utilifyctl awake extend 30m
+utilifyctl awake stop
+utilifyctl fans use full-blast   # or automatic, custom, or one of your presets
+utilifyctl fans set left 3000    # or auto, max, curve cpu_core_average 50 85
+utilifyctl fans save Quiet       # also rename and delete
+utilifyctl sensors
+utilifyctl settings              # every setting, with its key
+utilifyctl settings set awake_allow_display_sleep off
+utilifyctl health run            # health fix <id> runs a check's fix
+utilifyctl open fans             # opens the dashboard on a tab
+utilifyctl workbench open
+```
+
+`utilifyctl --help` lists the rest: problems, snooze, login, launch and quit.
+Each command also has its own `--help`.
+
+The live view (`watch`, or `-w` on a tab) switches tabs with 1 to 6 or the
+arrow keys and quits with q. It redraws at the app's refresh interval. Each
+frame is written to the screen in one go, and nothing is cleared first, so it
+doesn't flicker. Charts are Unicode block characters, and each cell shows
+eighths of its height. The live view keeps one connection open and asks for
+one snapshot per refresh, so it barely registers in Activity Monitor.
+
+`--json` prints any command's data or outcome as JSON, for scripts (the
+live view has no JSON form). The exit status is 0
+on success, 1 when something is refused (with the reason on stderr), and 2
+when Utilify isn't running. `utilifyctl launch` starts it. The settings
+commands also work while Utilify is closed: they edit `settings.json`, which
+the app reads when it starts.
+
+Settings take the same values the dashboard offers. On/off settings take `on`
+or `off`. The refresh interval is one of 0.5 s, 1 s, 2 s or 5 s. Yellow
+starts below red, and both stay between 5% and 95%. A temperature sensor can
+be given by id or by name. Fan speeds are clamped to the fan's range, and
+curves run between 20 and 110 °C. Fan changes need the fan helper, as they do
+in the dashboard.
+
+The app listens on `<Application Support>/dev.utilify.app/cli.sock`. Only
+your user can open it: the file is mode 0600 and the app checks the uid of
+each connection. If that path is too long for a socket, both sides use the
+per-user temporary folder instead. `install.sh` links
+`Utilify.app/Contents/MacOS/utilifyctl` into the first writable folder of
+`/opt/homebrew/bin`, `/usr/local/bin` and `~/.local/bin`. Change the folder
+with `UTILIFY_CLI_DIR`, or skip the link with `UTILIFY_NO_CLI=1`.
+
 ## Install
 
 ```sh
@@ -231,6 +292,7 @@ and deletes those files. Intel Macs skip it: fans are read-only there.
 
 ```sh
 cargo run -p utilify-app            # debug, unbundled
+cargo run -p utilify-cli -- status  # utilifyctl against the running app
 cargo packager --release -p utilify-app --formats app   # Utilify.app (LSUIElement, no Dock icon)
 ```
 
@@ -300,6 +362,7 @@ crates/
 │    health.rs    the periodic self-checks
 │    monitor.rs   one tick: rates, rolling history, session totals, cached disk
 │    icon.rs      menu-bar SVG + resvg rasterizer
+│    ipc.rs       utilifyctl's socket: requests, snapshots, client and server
 │    format.rs, history.rs, settings.rs (<Application Support>/dev.utilify.app/settings.json)
 ├─ utilify-smc/    The SMC: keys, typed values, fans, temperatures (IOKit, no root
 │                 needed to read), and the fan helper's wire protocol.
@@ -315,8 +378,17 @@ crates/
 │    catalog.rs   CyberChef's full category list, ported or not
 │    session.rs   the workbench state kept across launches
 │    tests/cyberchef_vectors.rs  CyberChef's own operation tests, run on the port
+├─ utilify-cli/    binary `utilifyctl`. No gpui dependency.
+│    main.rs      the commands, and the live view's loop
+│    view.rs      what each command shows, one renderer per dashboard tab
+│    chart.rs     sparklines, column charts and bars from block characters
+│    term.rs      colour, size, the live view's screen and keys (libc, no
+│                 terminal library)
+│    parse.rs     durations, times, modes, fans, controls and presets
 └─ utilify-app/    binary `utilify`
      lib.rs       startup (Accessory policy), sampler timer, tray event loop
+     control.rs   answers utilifyctl on the main thread, through the same
+                  functions as the menu and the dashboard
      tray.rs      status item, menu, icon updates (main thread only)
      dashboard.rs the GPUI popover: the six tabs, shortcuts, toasts, and
                   opening and closing the window

@@ -586,6 +586,10 @@ struct WorkbenchWindow(Option<AnyWindowHandle>);
 
 impl Global for WorkbenchWindow {}
 
+pub fn is_open(cx: &App) -> bool {
+    cx.try_global::<WorkbenchWindow>().is_some_and(|w| w.0.is_some())
+}
+
 pub fn open(cx: &mut App) {
     if let Some(handle) = cx.try_global::<WorkbenchWindow>().and_then(|w| w.0)
         && handle

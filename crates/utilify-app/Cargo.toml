@@ -43,10 +43,11 @@ identifier = "dev.utilify.app"
 description = "Menu-bar network and storage monitor"
 category = "Utility"
 copyright = "Copyright (c) 2026 Imran"
-before-packaging-command = "cargo build --release -p utilify-app"
+before-packaging-command = "cargo build --release -p utilify-app -p utilify-cli"
 out-dir = "../../target/packages"
 binaries-dir = "../../target/release"
-binaries = [{ path = "utilify", main = true }]
+# utilifyctl ships inside the bundle; install.sh links it onto the PATH.
+binaries = [{ path = "utilify", main = true }, { path = "utilifyctl", main = false }]
 icons = ["../../assets/icons/app/utilify.png", "../../assets/icons/app/utilify.icns"]
 
 [package.metadata.packager.macos]

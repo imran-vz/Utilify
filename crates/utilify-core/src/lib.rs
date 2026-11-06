@@ -10,6 +10,7 @@
 //! - [`fans`]: fan presets and curves, and control through the root helper.
 //! - [`monitor`]: one tick of sampling, plus the rolling history.
 //! - [`icon`]: the menu-bar graph, built as SVG and rasterized with resvg.
+//! - [`ipc`]: the socket `utilifyctl` uses to read and drive the running app.
 //! - [`format`]: human-readable sizes and rates.
 //! - [`health`]: periodic self-checks of the data directory, tools and files.
 //! - [`sensors`]: named temperature sensors (Apple Silicon).
@@ -28,6 +29,7 @@ pub mod format;
 pub mod health;
 pub mod history;
 pub mod icon;
+pub mod ipc;
 pub mod monitor;
 pub mod net;
 pub mod power;

@@ -4,6 +4,7 @@
 //! item from `tray-icon`.
 
 pub mod assets;
+pub mod control;
 pub mod dashboard;
 pub mod placement;
 pub mod stats;
@@ -26,6 +27,17 @@ pub fn run() {
         env!("CARGO_PKG_VERSION")
     );
     let settings_path = utilify_core::settings::default_path();
+    // Held until the CLI socket is up, so `utilifyctl settings set` with
+    // the app closed can't write after this load and go unseen.
+    let startup_lock = settings_path
+        .as_deref()
+        .and_then(|p| match utilify_core::settings::lock(p) {
+            Ok(l) => Some(l),
+            Err(e) => {
+                log::warn!("Couldn't lock the settings: {e}");
+                None
+            }
+        });
     let settings = settings_path
         .as_deref()
         .map(utilify_core::settings::load)
@@ -53,6 +65,7 @@ pub fn run() {
             cx.set_global(StatsGlobal(stats.clone()));
             let on_quit = stats.clone();
             cx.on_app_quit(move |cx| {
+                control::stop();
                 on_quit.update(cx, |s, _| s.shutdown());
                 // Warnings about the fans or the session no longer apply.
                 for tag in Stats::alert_tags() {
@@ -69,6 +82,8 @@ pub fn run() {
                 return;
             }
             spawn_tray_events(rx, cx);
+            control::start(cx);
+            drop(startup_lock);
             if settings.awake_on_launch {
                 start_keep_awake(cx, Mode::Indefinite, Activation::AtLaunch);
             }
@@ -122,7 +137,11 @@ pub fn run() {
                 stats,
                 |stats, cx| {
                     // Sensors every tick only while something shows them.
-                    let show = dashboard::is_open(cx) || stats.read(cx).settings.show_temp;
+                    let cli = stats
+                        .read(cx)
+                        .cli_sensors_at
+                        .is_some_and(|t| t.elapsed() < control::SENSORS_FOR);
+                    let show = dashboard::is_open(cx) || stats.read(cx).settings.show_temp || cli;
                     stats.update(cx, |s, _| s.want_fan_sensors(show));
                     tray::update(stats.read(cx));
                 },
@@ -277,6 +296,16 @@ pub fn start_keep_awake(cx: &mut App, mode: Mode, activation: Activation) {
         Mode::WhileApp(pid) => tray::app_name(pid),
         _ => None,
     };
+    start_keep_awake_with(cx, mode, activation, subject);
+}
+
+/// [`start_keep_awake`] with the app's name for [`Mode::WhileApp`] given.
+pub fn start_keep_awake_with(
+    cx: &mut App,
+    mode: Mode,
+    activation: Activation,
+    subject: Option<String>,
+) {
     stats::stats(cx).update(cx, |s, cx| {
         s.start_keep_awake(mode, activation, subject, cx)
     });

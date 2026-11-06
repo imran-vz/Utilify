@@ -60,7 +60,28 @@ pub mod login {
         )
     }
 
+    /// [`enabled`], at most [`CACHE_FOR`] old. Asking the system takes
+    /// about 100 ms, too slow for every `utilifyctl` snapshot; [`set`]
+    /// clears it, so changes made in Utilify show at once.
+    pub fn enabled_cached() -> Option<bool> {
+        use std::time::Instant;
+        let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+        match *cache {
+            Some((at, v)) if at.elapsed() < CACHE_FOR => v,
+            _ => {
+                let v = enabled();
+                *cache = Some((Instant::now(), v));
+                v
+            }
+        }
+    }
+
+    const CACHE_FOR: std::time::Duration = std::time::Duration::from_secs(30);
+    static CACHE: std::sync::Mutex<Option<(std::time::Instant, Option<bool>)>> =
+        std::sync::Mutex::new(None);
+
     pub fn set(on: bool) -> anyhow::Result<()> {
+        *CACHE.lock().unwrap_or_else(|e| e.into_inner()) = None;
         let s = service().ok_or_else(|| anyhow::anyhow!("needs macOS 13 or later"))?;
         // SAFETY: plain calls on the main app's service.
         let result = unsafe {
@@ -77,6 +98,10 @@ pub mod login {
 #[cfg(not(target_os = "macos"))]
 pub mod login {
     pub fn enabled() -> Option<bool> {
+        None
+    }
+
+    pub fn enabled_cached() -> Option<bool> {
         None
     }
 

@@ -1179,7 +1179,8 @@ fn latency_parts(r: &speedtest::SpeedTestResult) -> Vec<(String, Option<Hsla>)> 
 }
 
 /// A test's results as text, for the clipboard.
-fn speed_test_summary(r: &speedtest::SpeedTestResult) -> String {
+/// What the speed test's Copy puts on the clipboard (`utilifyctl` too).
+pub(crate) fn speed_test_summary(r: &speedtest::SpeedTestResult) -> String {
     let mut out = format!(
         "Download {} Mbps, upload {} Mbps",
         mbps(r.down_bps),
@@ -1592,6 +1593,11 @@ fn dismiss(window: &mut Window, cx: &mut App) {
 }
 
 /// Open the Network tab's speed test section unfolded (debug launches).
+/// Carry out a health check's fix, as its button in Settings does.
+pub(crate) fn run_health_fix(fix: &str, cx: &App) {
+    status::run_fix(fix, cx);
+}
+
 pub fn unfold_speed_test(cx: &mut App) {
     state(cx).speed_test_open = true;
 }

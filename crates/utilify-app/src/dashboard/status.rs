@@ -164,7 +164,7 @@ impl Dashboard {
 }
 
 /// Carry out a check's suggested fix.
-fn run_fix(fix: &str, cx: &App) {
+pub(super) fn run_fix(fix: &str, cx: &App) {
     if fix == health::FIX_REVEAL_DATA_DIR
         && let Some(dir) = utilify_core::settings::default_path().and_then(|p| {
             p.parent().map(|d| d.to_path_buf())

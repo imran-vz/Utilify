@@ -223,11 +223,7 @@ pub fn tooltip(m: &Monitor, awake: Option<&str>) -> String {
 }
 
 pub fn interval_label(ms: u64) -> String {
-    if ms.is_multiple_of(1000) {
-        format!("{} s", ms / 1000)
-    } else {
-        format!("{} s", ms as f64 / 1000.0)
-    }
+    utilify_core::format::interval(ms)
 }
 
 /// The first line under "Keep Awake", like Amphetamine's session details.
