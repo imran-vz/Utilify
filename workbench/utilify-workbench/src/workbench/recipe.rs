@@ -9,15 +9,15 @@ use super::widgets::{
     Choice, chip, drop_line, dropdown, field_frame, hover_tint, panel, press_tint, remove_button,
     text_button, tool_button,
 };
-use crate::ui::{
-    self, R_MD, R_SM, Tone,
-    color::{self, *},
-    px, radius, text,
-};
 use gpui_kit::component::input::{Input, InputEvent, InputState, Textarea, TextareaState};
 use gpui_kit::component::{Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
+use utilify_app::ui::{
+    self, R_MD, R_SM, Tone,
+    color::{self, *},
+    px, radius, text,
+};
 use utilify_chef::recipe::Halt;
 use utilify_chef::{ArgKind, ArgValue, Operation, Recipe, Step};
 

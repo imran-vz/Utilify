@@ -13,12 +13,15 @@
 #                         first writable of /opt/homebrew/bin, /usr/local/bin,
 #                         ~/.local/bin)
 #   UTILIFY_NO_CLI=1     don't link utilifyctl
+#   UTILIFY_NO_WORKBENCH=1  leave the workbench out. It's left out anyway when
+#                         ../utilify-codecs is missing or it fails to build.
 set -euo pipefail
 
 APP="Utilify.app"
 
 say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
 die() { printf '\033[31merror:\033[0m %s\n' "$*" >&2; exit 1; }
+warn() { printf '\033[33mwarning:\033[0m %s\n' "$*" >&2; }
 
 [[ "$(uname -s)" == Darwin ]] || die "Utilify only runs on macOS."
 command -v cargo >/dev/null || die "cargo not found. Install Rust from https://rustup.rs and re-run."
@@ -37,6 +40,26 @@ cargo packager --release -p utilify-app --formats app
 built="target/packages/$APP"
 [[ -d "$built" ]] || die "build finished but $built is missing"
 
+# The workbench is a separate program in the bundle, built from its own
+# workspace (workbench/) because it needs the utilify-codecs checkout. The
+# app turns its menu item and button off when it isn't there.
+if [[ "${UTILIFY_NO_WORKBENCH:-}" == 1 ]]; then
+  say "Leaving out the workbench (UTILIFY_NO_WORKBENCH=1)"
+elif [[ ! -d ../utilify-codecs/crates ]]; then
+  warn "leaving out the workbench: it needs utilify-codecs cloned next to this checkout ($(cd .. && pwd)/utilify-codecs)"
+else
+  say "Building the workbench (release)"
+  if cargo build --release --manifest-path workbench/Cargo.toml --target-dir target -p utilify-workbench; then
+    cp target/release/utilify-workbench "$built/Contents/MacOS/"
+    # Adding a file breaks the bundle's signature, so sign it again (ad hoc,
+    # as cargo-packager did).
+    codesign --force --sign - "$built/Contents/MacOS/utilify-workbench"
+    codesign --force --sign - "$built"
+  else
+    warn "the workbench didn't build (see above), so it's left out; everything else installs as usual"
+  fi
+fi
+
 dest="${UTILIFY_INSTALL_DIR:-/Applications}"
 if [[ -z "${UTILIFY_INSTALL_DIR:-}" && ! -w "$dest" ]]; then
   dest="$HOME/Applications"
@@ -51,6 +74,8 @@ if pgrep -xq utilify; then
   osascript -e 'quit app "Utilify"' >/dev/null 2>&1 || pkill -x utilify || true
   sleep 1
 fi
+# The workbench saves a second after each change, so it can just be stopped.
+pkill -x utilify-workbench 2>/dev/null || true
 
 say "Installing to $dest/$APP"
 rm -rf "${dest:?}/$APP"
@@ -79,7 +104,7 @@ elif [[ -x "$cli" ]]; then
     *) echo "    $bin_dir isn't on your PATH; add it to run utilifyctl by name." ;;
   esac
 else
-  printf '\033[33mwarning:\033[0m %s is missing; utilifyctl not linked\n' "$cli" >&2
+  warn "$cli is missing; utilifyctl not linked"
 fi
 
 # Fan control. Setting fan speeds means writing to the SMC, which macOS only
@@ -144,7 +169,7 @@ PLIST
     ' _ "$helper" "$HELPER_BIN" "$plist" "$HELPER_PLIST" "$HELPER_LABEL"; then
     say "Fan helper running (log: /var/log/utilify-fanhelper.log)"
   else
-    printf '\033[33mwarning:\033[0m fan helper not installed; fan control stays read-only\n' >&2
+    warn "fan helper not installed; fan control stays read-only"
   fi
   rm -f "$plist"
 fi

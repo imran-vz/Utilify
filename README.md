@@ -173,7 +173,8 @@ saved file doesn't parse, Utilify moves it aside as
 
 ## The workbench
 
-Open it with ⌘B in the menu or the chef's hat in the dashboard header. It's a
+Open it with ⌘B in the menu, the chef's hat in the dashboard header, or
+`utilifyctl workbench open`. It's a
 full window in CyberChef's layout: operations on the left (search,
 favourites, CyberChef's categories), the recipe in the middle, and input over
 output on the right.
@@ -194,8 +195,17 @@ CyberChef URL (with its input). Copy gives chef format. The recipe, the input
 
 So far CyberChef's "Data format" category is ported, and the list shows the
 rest as "soon". The codecs come from maintained libraries and the
-utilify-codecs crates (see `crates/utilify-chef/DEPENDENCIES.md`). While the
-window is open, Utilify shows in the Dock.
+utilify-codecs crates (see `workbench/utilify-chef/DEPENDENCIES.md`).
+
+The workbench is a separate program, `utilify-workbench`, inside the app
+bundle. Utilify starts it when you open the workbench, and it quits when you
+close its window, so it uses no memory the rest of the time. While it's open,
+it shows in the Dock. Opening it again brings the open window forward.
+
+It's also optional. It needs utilify-codecs to build, so a copy of Utilify
+built without that checkout leaves it out. In that copy the menu item is off,
+the dashboard's chef's hat is dimmed, and `utilifyctl workbench open` exits
+with status 1.
 
 ## The command line
 
@@ -265,9 +275,11 @@ with `UTILIFY_CLI_DIR`, or skip the link with `UTILIFY_NO_CLI=1`.
 ```
 
 Builds the current source and installs it, so re-run it after pulling or
-editing. It needs Rust (https://rustup.rs) and a checkout of
-[utilify-codecs](https://github.com/imran-vz/utilify-codecs) next to this
-one (`../utilify-codecs`), which the workbench uses by path. The script installs
+editing. It needs Rust (https://rustup.rs). For the workbench it also needs a
+checkout of [utilify-codecs](https://github.com/imran-vz/utilify-codecs) next
+to this one (`../utilify-codecs`). Without that checkout, or if the workbench
+fails to build, the script prints a warning and installs everything else.
+`UTILIFY_NO_WORKBENCH=1` leaves the workbench out on purpose. The script installs
 `cargo-packager` if it's missing, builds `Utilify.app`, puts
 it in `/Applications` (or `~/Applications` if that isn't writable; override
 with `UTILIFY_INSTALL_DIR`), and launches it (skip that with
@@ -296,9 +308,23 @@ cargo run -p utilify-cli -- status  # utilifyctl against the running app
 cargo packager --release -p utilify-app --formats app   # Utilify.app (LSUIElement, no Dock icon)
 ```
 
+The workbench is in its own workspace, `workbench/`, so the commands above
+work without utilify-codecs. The app looks for `utilify-workbench` next to its
+own executable, so build it into the same `target/` to use it from
+`cargo run -p utilify-app`:
+
+```sh
+cargo build --manifest-path workbench/Cargo.toml --target-dir target
+cd workbench && cargo test --workspace   # utilify-chef and the window
+```
+
+Inside `workbench/`, Cargo uses the main `target/` anyway (set in
+`workbench/.cargo/config.toml`), so the two workspaces share compiled
+dependencies.
+
 Debug builds read a few environment variables:
 
-- `UTILIFY_DEV_OPEN_WORKBENCH=1` opens the workbench at launch.
+- `UTILIFY_DEV_OPEN_WORKBENCH=1` opens the workbench at launch, if it's built.
 - `UTILIFY_DEV_OPEN_DASHBOARD=1` opens the dashboard at launch. With it,
   `UTILIFY_DEV_TAB=network` (or `storage`, `awake`, `fans`, `settings`) picks
   the tab, `UTILIFY_DEV_SPEED_TEST=1` starts a speed test (with its section unfolded),
@@ -370,14 +396,6 @@ crates/
 ├─ utilify-fanhelper/  binary `utilify-fanhelper`, the root LaunchDaemon that sets
 │                 fan speeds. `--socket <path> --no-root-check` (and `--fake` for an
 │                 in-memory SMC) run it as a normal user for testing.
-├─ utilify-chef/   The workbench engine. No UI and no gpui dependency.
-│    dish.rs      the value between operations, with CyberChef's text/bytes rules
-│    args.rs      argument kinds (CyberChef's), values and typed access
-│    recipe.rs    steps, baking, breakpoints; CyberChef JSON, chef format, URLs
-│    ops/         the operations, one module per CyberChef category
-│    catalog.rs   CyberChef's full category list, ported or not
-│    session.rs   the workbench state kept across launches
-│    tests/cyberchef_vectors.rs  CyberChef's own operation tests, run on the port
 ├─ utilify-cli/    binary `utilifyctl`. No gpui dependency.
 │    main.rs      the commands, and the live view's loop
 │    view.rs      what each command shows, one renderer per dashboard tab
@@ -399,7 +417,20 @@ crates/
      ui.rs        the design system: light and dark colours, the type and
                   corner scales, and the parts both windows are built from
      placement.rs dashboard position and height under the clicked status item
-     workbench.rs the workbench window: state, baking, persistence, header
+     workbench.rs finds and starts utilify-workbench, or brings it forward
+
+workbench/          A second workspace: needs ../utilify-codecs (see Install)
+├─ utilify-chef/   The workbench engine. No UI and no gpui dependency.
+│    dish.rs      the value between operations, with CyberChef's text/bytes rules
+│    args.rs      argument kinds (CyberChef's), values and typed access
+│    recipe.rs    steps, baking, breakpoints; CyberChef JSON, chef format, URLs
+│    ops/         the operations, one module per CyberChef category
+│    catalog.rs   CyberChef's full category list, ported or not
+│    session.rs   the workbench state kept across launches
+│    tests/cyberchef_vectors.rs  CyberChef's own operation tests, run on the port
+└─ utilify-workbench/  binary `utilify-workbench`, drawn with utilify-app's ui.rs
+     main.rs      one copy at a time (workbench.lock), then the window
+     workbench.rs the window: state, baking, persistence, header
      workbench/   operations list, recipe steps, input/output, widgets
 ```
 
@@ -408,14 +439,14 @@ crates/
 Names, arguments and defaults match CyberChef, so its recipes load unchanged,
 but each operation follows its format's specification rather than CyberChef:
 where CyberChef deviates from the spec, the port doesn't copy it.
-`crates/utilify-chef/tests/vectors/cyberchef.json` holds CyberChef's operation
+`workbench/utilify-chef/tests/vectors/cyberchef.json` holds CyberChef's operation
 tests (exported by `scripts/cyberchef/export.mjs`); every vector whose
 operations are all ported must pass, apart from the places CyberChef deviates from
 the spec, listed in `known_differences.txt`. `VECTORS=Base64 cargo test -p utilify-chef --test
-cyberchef_vectors -- --nocapture` runs a subset. For behaviour the vectors
+cyberchef_vectors -- --nocapture`, run in `workbench/`, runs a subset. For behaviour the vectors
 don't cover, `scripts/cyberchef/oracle.mjs` bakes recipes with real CyberChef;
 see `scripts/cyberchef/README.md`. Ported operations follow CyberChef
-(Apache-2.0, Crown Copyright). `crates/utilify-chef/PORTING.md` has the
+(Apache-2.0, Crown Copyright). `workbench/utilify-chef/PORTING.md` has the
 port's status and the rule for dependencies: maintained, well-used libraries
 for encodings, formats and crypto, with our code as the CyberChef adapter.
 

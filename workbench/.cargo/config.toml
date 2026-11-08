@@ -1,0 +1,5 @@
+# Share the main workspace's target directory, so the app's dependencies
+# (gpui and the rest) are built once for both. Cargo reads this only when run
+# from inside workbench/; install.sh passes --target-dir instead.
+[build]
+target-dir = "../target"

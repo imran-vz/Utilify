@@ -270,6 +270,14 @@ pub struct Snapshot {
     pub launch_at_login: Option<bool>,
     pub dashboard_open: bool,
     pub workbench_open: bool,
+    /// Whether this copy of Utilify has the workbench (it's optional at
+    /// build time). Missing from older apps, which always had it.
+    #[serde(default = "yes")]
+    pub workbench_available: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

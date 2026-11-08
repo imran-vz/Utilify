@@ -4,7 +4,6 @@
 
 use super::widgets::{chip, panel, text_button, tool_button};
 use super::{InputFile, MAX_SHOWN, Workbench, thousands};
-use crate::ui::{self, R_MD, Tone, color::*, px, radius, text};
 use gpui_kit::component::h_flex;
 use gpui_kit::component::input::Textarea;
 use gpui_kit::component::v_flex;
@@ -12,6 +11,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use std::path::PathBuf;
 use std::sync::Arc;
+use utilify_app::ui::{self, R_MD, Tone, color::*, px, radius, text};
 use utilify_chef::Dish;
 use utilify_chef::recipe::Halt;
 use utilify_core::format;
@@ -195,7 +195,7 @@ impl Workbench {
                 .flex_1()
                 .min_h_0()
                 .p(px(10.))
-                .font_family(crate::theme::MONO_FONT)
+                .font_family(utilify_app::theme::MONO_FONT)
                 .text_size(px(text::SMALL))
                 .child(Textarea::new(&self.input).appearance(false).h_full())
                 .into_any_element(),
@@ -358,7 +358,7 @@ impl Workbench {
                 .flex_1()
                 .min_h_0()
                 .p(px(10.))
-                .font_family(crate::theme::MONO_FONT)
+                .font_family(utilify_app::theme::MONO_FONT)
                 .text_size(px(text::SMALL))
                 .when(failed, |d| d.text_color(danger()))
                 .child(
@@ -399,7 +399,7 @@ fn drop_overlay() -> Div {
         .border_dashed()
         .border_color(focus())
         // Nearly opaque, to hide the text under it.
-        .bg(crate::ui::color::panel().opacity(0.94))
+        .bg(utilify_app::ui::color::panel().opacity(0.94))
         .invisible()
         // Group drag styles need a hitbox; a hover style gives it one.
         .hover(|s| s)

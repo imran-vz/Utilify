@@ -10,7 +10,7 @@ as JSON. It needs no npm install:
 
 ```sh
 node scripts/cyberchef/export.mjs /path/to/CyberChef/tests/operations/tests \
-  crates/utilify-chef/tests/vectors/cyberchef.json
+  workbench/utilify-chef/tests/vectors/cyberchef.json
 ```
 
 ## Oracle

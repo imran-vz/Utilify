@@ -281,10 +281,10 @@ fn handle(request: Request, cx: &mut App) -> Response {
             }
             Response::ok()
         }
-        Request::OpenWorkbench => {
-            workbench::open(cx);
-            Response::ok()
-        }
+        Request::OpenWorkbench => match workbench::open() {
+            Ok(()) => Response::ok(),
+            Err(e) => Response::error(e),
+        },
         Request::Quit => {
             // Answer first, then quit through the normal path (fans back to
             // automatic, the session's last stretch saved).
@@ -523,7 +523,7 @@ fn helper_state(h: &HelperStatus) -> (&'static str, String) {
 
 fn snapshot(with_disk_history: bool, cx: &mut App) -> ipc::Snapshot {
     let dashboard_open = dashboard::is_open(cx);
-    let workbench_open = workbench::is_open(cx);
+    let workbench_open = workbench::is_open();
     let s = stats::stats(cx).read(cx);
     let now = Instant::now();
     let m = &s.monitor;
@@ -695,5 +695,6 @@ fn snapshot(with_disk_history: bool, cx: &mut App) -> ipc::Snapshot {
         launch_at_login: system::login::enabled_cached(),
         dashboard_open,
         workbench_open,
+        workbench_available: workbench::is_available(),
     }
 }

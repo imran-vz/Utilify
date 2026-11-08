@@ -440,7 +440,13 @@ pub fn build(settings: &Settings, events: smol::channel::Sender<TrayEvent>) -> a
     let menu = Menu::new();
     menu.append_items(&[
         &item(MenuAction::OpenDashboard, "Open Dashboard", None),
-        &item(MenuAction::OpenWorkbench, "Open Workbench", cmd(Code::KeyB)),
+        // Off in builds without the workbench.
+        &MenuItem::with_id(
+            MenuAction::OpenWorkbench.id(),
+            "Open Workbench",
+            crate::workbench::is_available(),
+            cmd(Code::KeyB),
+        ),
         &awake_menu,
         &fans_menu,
         &PredefinedMenuItem::separator(),

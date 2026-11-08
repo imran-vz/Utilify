@@ -2,12 +2,13 @@
 resolver = "2"
 members = [
     "crates/utilify-core",
-    "crates/utilify-chef",
     "crates/utilify-app",
     "crates/utilify-cli",
     "crates/utilify-smc",
     "crates/utilify-fanhelper",
 ]
+# The workbench builds separately: it needs the utilify-codecs checkout.
+exclude = ["workbench"]
 
 [workspace.package]
 version = "0.1.0"

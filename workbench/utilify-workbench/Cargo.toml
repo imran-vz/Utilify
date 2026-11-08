@@ -1,0 +1,18 @@
+[package]
+name = "utilify-workbench"
+description = "Utilify's data workbench window, run by the app as its own process"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "utilify-workbench"
+path = "src/main.rs"
+
+[dependencies]
+utilify-app = { path = "../../crates/utilify-app" }
+utilify-core = { path = "../../crates/utilify-core" }
+utilify-chef = { path = "../utilify-chef" }
+gpui-kit = "=0.7.3"
+log = "0.4"
+env_logger = "0.11"

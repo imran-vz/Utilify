@@ -76,5 +76,5 @@ can't (with the reason).
 2. Pick the library (policy above), then write the operation in
    `src/ops/<category>/`, following `src/ops/data_format/hex.rs`.
 3. Unit-test cases the vectors miss, with expected values from the oracle.
-4. Run `cargo test -p utilify-chef`, `cargo clippy --all-targets -- -D
+4. In `workbench/`, run `cargo test -p utilify-chef`, `cargo clippy --all-targets -- -D
    warnings` and `cargo fmt --check`.

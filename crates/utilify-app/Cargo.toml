@@ -16,7 +16,6 @@ path = "src/main.rs"
 [dependencies]
 utilify-core = { path = "../utilify-core" }
 utilify-smc = { path = "../utilify-smc" }
-utilify-chef = { path = "../utilify-chef" }
 gpui-kit = "=0.7.3"
 tray-icon = "0.24"
 log = "0.4"

@@ -1,7 +1,7 @@
 //! Utilify: menu-bar utilities for macOS. A network and storage monitor
-//! with keep awake and fan control (on top of `utilify-core`), and a CyberChef-style data
-//! workbench (on top of `utilify-chef`). GPUI via gpui-kit, with the status
-//! item from `tray-icon`.
+//! with keep awake and fan control (on top of `utilify-core`). GPUI via
+//! gpui-kit, with the status item from `tray-icon`. The CyberChef-style data
+//! workbench is a separate, optional program that [`workbench`] starts.
 
 pub mod assets;
 pub mod control;
@@ -54,7 +54,6 @@ pub fn run() {
             gpui_kit::init(cx);
             theme::init(cx);
             dashboard::init(cx);
-            workbench::init(cx);
             cx.on_system_notification_response(handle_notification);
 
             let stats = cx.new(|cx| {
@@ -110,7 +109,7 @@ pub fn run() {
             }
             #[cfg(debug_assertions)]
             if std::env::var_os("UTILIFY_DEV_OPEN_WORKBENCH").is_some() {
-                workbench::open(cx);
+                open_workbench();
             }
             #[cfg(debug_assertions)]
             if std::env::var_os("UTILIFY_DEV_OPEN_DASHBOARD").is_some() {
@@ -223,7 +222,7 @@ pub fn handle_tray_event(event: TrayEvent, cx: &mut App) {
     match event {
         TrayEvent::Clicked => dashboard::toggle(cx),
         TrayEvent::Menu(MenuAction::OpenDashboard) => dashboard::open(cx),
-        TrayEvent::Menu(MenuAction::OpenWorkbench) => workbench::open(cx),
+        TrayEvent::Menu(MenuAction::OpenWorkbench) => open_workbench(),
         TrayEvent::Menu(MenuAction::Quit) => cx.quit(),
         TrayEvent::Menu(MenuAction::SetInterval(ms)) => {
             update_settings(cx, |s| s.interval_ms = ms);
@@ -265,6 +264,15 @@ pub fn handle_tray_event(event: TrayEvent, cx: &mut App) {
             update_settings(cx, |s| s.awake_notify_end = !s.awake_notify_end)
         }
         TrayEvent::Menu(MenuAction::ToggleLaunchAtLogin) => toggle_launch_at_login(cx),
+    }
+}
+
+/// Start the workbench, or bring it forward. The menu item and the
+/// dashboard button are off when it isn't there, so a failure here only
+/// gets logged.
+pub fn open_workbench() {
+    if let Err(e) = workbench::open() {
+        log::warn!("{e}");
     }
 }
 

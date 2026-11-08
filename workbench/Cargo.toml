@@ -1,0 +1,30 @@
+# The workbench: its own workspace, because utilify-chef uses the
+# utilify-codecs crates from a sibling checkout (../../utilify-codecs) by
+# path, and Cargo can't build a workspace that names a missing path, even
+# behind an optional feature. Keeping it here lets the main workspace build
+# without the codecs. install.sh builds this one only when they're present
+# and puts utilify-workbench into Utilify.app, next to the app.
+#
+#   cargo build --release --manifest-path workbench/Cargo.toml --target-dir target
+[workspace]
+resolver = "2"
+members = ["utilify-chef", "utilify-workbench"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Imran"]
+
+[profile.dev]
+incremental = true
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+panic = "unwind"
+
+# Same patch as the main workspace (see ../Cargo.toml).
+[patch.crates-io]
+block = { path = "../vendor/block" }

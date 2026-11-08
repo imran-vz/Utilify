@@ -522,10 +522,7 @@ impl Dashboard {
             title,
             ui::dotted(subtitle),
             chip,
-            h_flex().flex_none().gap(px(8.)).child(
-                ui::icon_action("open-workbench", "chef-hat", "Open Workbench", Some("⌘B"))
-                    .on_click(|_, _, cx| crate::workbench::open(cx)),
-            ),
+            h_flex().flex_none().gap(px(8.)).child(workbench_button()),
         )
     }
 
@@ -1260,6 +1257,19 @@ fn speed_test_button(s: &Snapshot, cx: &mut Context<Dashboard>) -> Div {
         .when(running, |row| row.child(cancel_button()))
 }
 
+/// The header's workbench button: dimmed, with a note why, in builds
+/// without the workbench.
+fn workbench_button() -> Stateful<Div> {
+    const ID: &str = "open-workbench";
+    if crate::workbench::is_available() {
+        ui::icon_action(ID, "chef-hat", "Open Workbench", Some("⌘B"))
+            .on_click(|_, _, _| crate::open_workbench())
+    } else {
+        ui::icon_button(ID, ui::icon("chef-hat", 18., fg4()))
+            .tooltip(ui::tip("Workbench not included in this build", None))
+    }
+}
+
 /// Square red ✕ beside the running test's button; stops the test.
 fn cancel_button() -> Stateful<Div> {
     div()
@@ -1537,7 +1547,7 @@ impl Render for Dashboard {
             .on_action(cx.listener(|this, _: &ShowAwake, _, cx| this.set_tab(Tab::Awake, cx)))
             .on_action(cx.listener(|this, _: &ShowFans, _, cx| this.set_tab(Tab::Fans, cx)))
             .on_action(cx.listener(|this, _: &ShowSettings, _, cx| this.set_tab(Tab::Settings, cx)))
-            .on_action(|_: &OpenWorkbench, _, cx| crate::workbench::open(cx))
+            .on_action(|_: &OpenWorkbench, _, _| crate::open_workbench())
             .on_action(|_: &QuitApp, _, cx| cx.quit())
             .on_mouse_down(MouseButton::Left, |_, window, cx| dismiss(window, cx))
             .child(card)

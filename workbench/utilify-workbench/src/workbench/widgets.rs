@@ -1,15 +1,15 @@
 //! Pieces the workbench's panels are built from, in the dashboard's style
-//! (see [`crate::ui`]): inset panels, small icon and text buttons, a
+//! (see [`utilify_app::ui`]): inset panels, small icon and text buttons, a
 //! dropdown and the frame text fields sit in.
 
-use crate::ui::{
+use gpui_kit::component::{h_flex, v_flex};
+use gpui_kit::prelude::FluentBuilder as _;
+use gpui_kit::*;
+use utilify_app::ui::{
     self, R_MD, R_SM,
     color::{self, *},
     px, radius, text,
 };
-use gpui_kit::component::{h_flex, v_flex};
-use gpui_kit::prelude::FluentBuilder as _;
-use gpui_kit::*;
 
 /// Hover tint for flat controls. A faint wash of the text colour, so it
 /// reads on any surface (panel, step card, popover) in either appearance.
@@ -289,7 +289,7 @@ pub fn field_frame(focused: bool) -> Div {
         .bg(control())
         .border_1()
         .border_color(if focused { focus() } else { control_border() })
-        .font_family(crate::theme::MONO_FONT)
+        .font_family(utilify_app::theme::MONO_FONT)
         .text_size(px(text::SMALL))
         .text_color(fg())
 }

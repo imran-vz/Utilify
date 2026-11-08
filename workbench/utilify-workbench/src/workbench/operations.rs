@@ -4,11 +4,11 @@
 
 use super::Workbench;
 use super::widgets::{chip, field_frame, hover_tint, panel, press_tint, tool_button};
-use crate::ui::{self, R_MD, R_SM, color::*, px, radius, text};
 use gpui_kit::component::input::Input;
 use gpui_kit::component::{h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
+use utilify_app::ui::{self, R_MD, R_SM, color::*, px, radius, text};
 use utilify_chef::Operation;
 use utilify_chef::catalog::CATEGORIES;
 
@@ -36,7 +36,7 @@ impl Render for DragLabel {
                 spread_radius: px(0.),
                 inset: false,
             }])
-            .font_family(crate::theme::UI_FONT)
+            .font_family(utilify_app::theme::UI_FONT)
             .text_size(px(text::SMALL))
             .text_color(fg())
             .child(ui::icon("grip-vertical", 14., fg3()))
@@ -57,7 +57,7 @@ impl Workbench {
         let search = field_frame(focused)
             .pl(px(10.))
             .gap(px(4.))
-            .font_family(crate::theme::UI_FONT)
+            .font_family(utilify_app::theme::UI_FONT)
             .child(ui::icon("search", 14., if focused { fg2() } else { fg3() }))
             .child(
                 div().flex_1().min_w_0().child(
